@@ -273,6 +273,40 @@ export function QueueItem({ title, note, active, onClick }) {
   );
 }
 
+export function ClaimSwitcher({ title = "Claims", claims, activeId, onSelect, tone = "blue", subtitle }) {
+  if (!claims?.length) return null;
+  const toneColor = TONES[tone] || TONES.blue;
+
+  return (
+    <div style={{ padding: 16, borderRadius: 16, border: `1px solid ${toneColor.border}`, background: toneColor.bg }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
+        <strong style={{ fontSize: 13, color: toneColor.text }}>{title}</strong>
+        {subtitle ? <span style={{ fontSize: 11, color: C.muted }}>{subtitle}</span> : null}
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {claims.map((claim) => (
+          <button
+            key={claim.id}
+            onClick={() => onSelect(claim.id)}
+            style={{
+              borderRadius: 999,
+              border: `1px solid ${claim.id === activeId ? toneColor.border : C.border}`,
+              background: claim.id === activeId ? C.surface : "rgba(255,255,255,.75)",
+              padding: "7px 12px",
+              fontSize: 12,
+              fontWeight: 700,
+              color: claim.id === activeId ? toneColor.text : C.text,
+              cursor: "pointer",
+            }}
+          >
+            {claim.id} · {claim.insuranceLabel}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function PageHeader({ title, copy }) {
   return (
     <header style={css(card, { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 18, flexWrap: "wrap", background: "linear-gradient(135deg,#f9fbff,#f2f7fd)" })}>

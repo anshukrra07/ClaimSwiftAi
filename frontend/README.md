@@ -1,6 +1,6 @@
 # ClaimSwift Frontend
 
-React frontend prototype for the ClaimSwift AI concept, recreated from the final dashboard and mobile design direction.
+React frontend for the ClaimSwift AI workspace. The UI now reads from the local backend API instead of relying only on hardcoded demo state.
 
 ## Stack
 
@@ -11,10 +11,15 @@ React frontend prototype for the ClaimSwift AI concept, recreated from the final
 ## Run
 
 ```bash
-cd "/Users/anshu/Downloads/projects/reality checker/claimswift-frontend"
-npm install
+cd /Users/anshu/Downloads/projects/claimSwift_AI/frontend
 npm run dev
 ```
+
+The frontend expects the backend API on `http://localhost:4100`. In local development the Vite proxy forwards `/api/*` requests there.
+
+## Auth
+
+The app now starts with a login screen and uses the backend session endpoints. Seeded accounts are defined in the root [README](/Users/anshu/Downloads/projects/claimSwift_AI/README.md).
 
 ## Screens
 
@@ -23,11 +28,13 @@ npm run dev
 - Decision dashboard
 - Reviewer console
 - Fraud heatmap and document intelligence
+- Operations control plane
 - Analytics overview
 - Mobile claimant home
 - Mobile clarification flow
 
 ## Notes
 
-- The app is frontend-only and uses local React state for navigation.
-- The intake screen includes the trust-building visible-processing workflow with step cards and clarification recovery.
+- Navigation is still local React state, but claim content, analytics, policy rules, session-aware operations, and workflow actions are API-backed.
+- The intake screen includes the visible-processing workflow with clarification recovery.
+- Reviewer actions, clarification submission, settlement simulation, and role-aware controls call the backend API.

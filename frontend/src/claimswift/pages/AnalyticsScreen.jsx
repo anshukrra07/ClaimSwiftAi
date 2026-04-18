@@ -1,19 +1,23 @@
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Radar, RadarChart, PolarAngleAxis, PolarGrid, PolarRadiusAxis } from "recharts";
-import { analyticsData, fraudRadar } from "../data";
 import { C, card } from "../theme";
 import { MetricCard, PageHeader, Tag } from "./PagePieces";
 
-export default function AnalyticsScreen() {
+export default function AnalyticsScreen({ dashboard }) {
+  const metrics = dashboard?.metrics;
+  const analyticsData = dashboard?.claimsByMonth || [];
+  const fraudRadar = dashboard?.fraudRadar || [];
+  const insights = dashboard?.insights || [];
+
   return (
     <section style={{ display: "grid", gap: 18 }}>
       <PageHeader title="Analytics & Operations Overview" copy="Track throughput, fraud pressure, STP performance, and complaint prevention across the claims pipeline." />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12 }}>
         {[
-          { label: "STP rate", value: "82%", accent: "teal", delta: "+4%", note: "low-risk auto-settled" },
-          { label: "Avg TAT", value: "8 min", accent: "blue", delta: "–3 min", note: "verified low-risk flow" },
-          { label: "Fraud flags", value: "14%", accent: "rose", delta: "+2%", note: "claims requiring review" },
-          { label: "Complaint reduction", value: "↓ 38%", accent: "navy", note: "status-check calls avoided" },
-          { label: "Manual effort", value: "18%", accent: "amber", delta: "–6%", note: "adjuster time saved" },
+          { label: "STP rate", value: metrics ? `${metrics.stpRate}%` : "—", accent: "teal", delta: "+4%", note: "low-risk auto-settled" },
+          { label: "Avg TAT", value: metrics ? `${metrics.avgTatMinutes} min` : "—", accent: "blue", delta: "–3 min", note: "verified low-risk flow" },
+          { label: "Fraud flags", value: metrics ? `${metrics.manualRate}%` : "—", accent: "rose", delta: "+2%", note: "claims requiring review" },
+          { label: "Complaint reduction", value: metrics ? `↓ ${metrics.complaintReduction}%` : "—", accent: "navy", note: "status-check calls avoided" },
+          { label: "Manual effort", value: metrics ? `${metrics.manualRate}%` : "—", accent: "amber", delta: "–6%", note: "adjuster time saved" },
         ].map((m) => <MetricCard key={m.label} {...m} />)}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.6fr) minmax(0,1fr)", gap: 18 }}>
@@ -65,7 +69,7 @@ export default function AnalyticsScreen() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
         <div style={card}>
           <h2 style={{ fontSize: 15, fontWeight: 800, marginBottom: 8 }}>Operations Insights</h2>
-          {["Top complaint driver prevented: missing-status visibility", "Clarification rate: 12% of claims need recovery flow", "Most common fraud cue: duplicate invoice pattern", "Best STP candidate: low-value health reimbursements"].map((i) => (
+          {insights.map((i) => (
             <div key={i} style={{ padding: "8px 0", borderBottom: `1px solid ${C.border}`, fontSize: 13, color: C.muted }}>• {i}</div>
           ))}
           <div style={{ marginTop: 14 }}>
@@ -78,7 +82,7 @@ export default function AnalyticsScreen() {
             <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.65, marginBottom: 14 }}>
               Transparent status updates, clarification prompts, and payout explanations reduce repeated claimant follow-ups.
             </p>
-            <MetricCard label="Status checks avoided" value="80%" accent="navy" />
+            <MetricCard label="Status checks avoided" value={metrics ? `${metrics.statusChecksAvoided}%` : "—"} accent="navy" />
           </div>
           <div style={card}>
             <h2 style={{ fontSize: 15, fontWeight: 800, marginBottom: 8 }}>Fraud Control Impact</h2>

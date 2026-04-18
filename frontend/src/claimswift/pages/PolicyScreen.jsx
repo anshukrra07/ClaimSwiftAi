@@ -1,8 +1,10 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { C, card } from "../theme";
+import { formatInr } from "../formatters";
+import { getPlaybook } from "../playbooks";
 import { PageHeader, Tag } from "./PagePieces";
 
-export default function PolicyScreen({ addToast }) {
+export default function PolicyScreen({ policyRules, onSave, addToast, canEditRules }) {
   const [rules, setRules] = useState({
     stpThreshold: true,
     deductible: true,
@@ -13,22 +15,32 @@ export default function PolicyScreen({ addToast }) {
   });
   const [deductible, setDeductible] = useState(2500);
   const [stpLimit, setStpLimit] = useState(25000);
+  const [lineType, setLineType] = useState("health");
+
+  useEffect(() => {
+    if (!policyRules) return;
+    setRules(policyRules.toggles);
+    setDeductible(policyRules.deductible);
+    setStpLimit(policyRules.stpLimit);
+  }, [policyRules]);
 
   const toggleRule = useCallback(
     (key) => {
+      if (!canEditRules) return;
       setRules((r) => ({ ...r, [key]: !r[key] }));
       addToast(`Rule ${rules[key] ? "disabled" : "enabled"}`, rules[key] ? "rose" : "teal");
     },
-    [rules, addToast],
+    [addToast, canEditRules, rules],
   );
 
   const activeCount = Object.values(rules).filter(Boolean).length;
+  const playbook = getPlaybook(lineType);
   const ruleList = [
     { key: "stpThreshold", label: "STP Amount Threshold", desc: `Claims ≤ INR ${stpLimit.toLocaleString()} eligible for auto-settle` },
-    { key: "deductible", label: "Deductible Rule", desc: `Apply INR ${deductible.toLocaleString()} standard deductible to all health claims` },
+    { key: "deductible", label: "Deductible Rule", desc: `Apply INR ${deductible.toLocaleString()} standard deductible to ${playbook.marketingLabel.toLowerCase()} claims` },
     { key: "duplicateCheck", label: "Duplicate Detection", desc: "Block claims with >70% invoice similarity to past submissions" },
     { key: "providerRisk", label: "Provider Risk Scoring", desc: "Escalate claims from high-risk provider profiles" },
-    { key: "docValidation", label: "Document Completeness", desc: "Require discharge summary + invoice + policy reference before routing" },
+    { key: "docValidation", label: "Document Completeness", desc: `Require ${playbook.requiredDocuments.slice(0, 3).join(" + ")} before routing` },
     { key: "amountCap", label: "High-Value Authorization", desc: "Mandate reviewer approval for claims above INR 50,000" },
   ];
 
@@ -43,12 +55,20 @@ export default function PolicyScreen({ addToast }) {
         <div style={{ display: "flex", gap: 10 }}>
           <Tag label={`STP limit: INR ${stpLimit.toLocaleString()}`} tone="teal" />
           <Tag label={`Deductible: INR ${deductible.toLocaleString()}`} tone="blue" />
+          <Tag label={`Line: ${playbook.marketingLabel}`} tone="amber" />
         </div>
+      </div>
+      <div style={{ ...card, display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {["health", "motor", "home", "life"].map((type) => (
+          <button key={type} className={`mode-chip ${lineType === type ? "active" : ""}`} onClick={() => setLineType(type)}>
+            {getPlaybook(type).marketingLabel}
+          </button>
+        ))}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,340px)", gap: 18 }}>
         <div style={{ display: "grid", gap: 12 }}>
           {ruleList.map((r) => (
-            <button key={r.key} className={`rule-toggle ${rules[r.key] ? "on" : "off"}`} onClick={() => toggleRule(r.key)}>
+            <button key={r.key} className={`rule-toggle ${rules[r.key] ? "on" : "off"}`} onClick={() => toggleRule(r.key)} disabled={!canEditRules}>
               <div>
                 <strong style={{ display: "block", fontSize: 14, color: rules[r.key] ? C.tealD : C.rose, marginBottom: 4 }}>{r.label}</strong>
                 <p style={{ fontSize: 13, color: C.muted, margin: 0, textAlign: "left" }}>{r.desc}</p>
@@ -67,7 +87,7 @@ export default function PolicyScreen({ addToast }) {
                 <span style={{ fontSize: 13, fontWeight: 700 }}>STP Amount Limit</span>
                 <strong style={{ fontSize: 14, color: C.teal }}>INR {stpLimit.toLocaleString()}</strong>
               </div>
-              <input type="range" min={5000} max={100000} step={1000} value={stpLimit} onChange={(e) => setStpLimit(+e.target.value)} />
+              <input type="range" min={5000} max={100000} step={1000} value={stpLimit} onChange={(e) => setStpLimit(+e.target.value)} disabled={!canEditRules} />
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.muted, marginTop: 4 }}>
                 <span>INR 5,000</span>
                 <span>INR 1,00,000</span>
@@ -78,7 +98,7 @@ export default function PolicyScreen({ addToast }) {
                 <span style={{ fontSize: 13, fontWeight: 700 }}>Standard Deductible</span>
                 <strong style={{ fontSize: 14, color: C.blue }}>INR {deductible.toLocaleString()}</strong>
               </div>
-              <input type="range" min={0} max={10000} step={500} value={deductible} onChange={(e) => setDeductible(+e.target.value)} />
+              <input type="range" min={0} max={10000} step={500} value={deductible} onChange={(e) => setDeductible(+e.target.value)} disabled={!canEditRules} />
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.muted, marginTop: 4 }}>
                 <span>INR 0</span>
                 <span>INR 10,000</span>
@@ -87,11 +107,11 @@ export default function PolicyScreen({ addToast }) {
           </div>
           <div style={card}>
             <h2 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Simulated Outcome</h2>
-            <p style={{ fontSize: 13, color: C.muted, marginBottom: 14 }}>Claim CLM-2026-2105 · INR 22,000 · Health reimbursement</p>
+            <p style={{ fontSize: 13, color: C.muted, marginBottom: 14 }}>{playbook.statusHelp}</p>
             {[
-              ["Claimed", "INR 22,000"],
-              ["Deductible", `– INR ${deductible.toLocaleString()}`],
-              ["Payable", `INR ${(22000 - deductible).toLocaleString()}`],
+              ["Claimed", formatInr(22000)],
+              ["Deductible", `– ${formatInr(deductible)}`],
+              ["Payable", formatInr(22000 - deductible)],
             ].map(([l, v], i) => (
               <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: i < 2 ? `1px solid ${C.border}` : "none" }}>
                 <span style={{ fontSize: 13, color: C.muted }}>{l}</span>
@@ -103,8 +123,19 @@ export default function PolicyScreen({ addToast }) {
                 {22000 - deductible <= stpLimit ? "✓ Eligible for auto-settlement" : "✗ Requires manual review — above STP limit"}
               </strong>
             </div>
-            <button className="btn btn-primary btn-full" style={{ marginTop: 14 }} onClick={() => addToast("Policy rules saved and applied to engine", "teal")}>
-              Save & apply rules
+            <button
+              className="btn btn-primary btn-full"
+              style={{ marginTop: 14 }}
+              disabled={!canEditRules}
+              onClick={() =>
+                onSave({
+                  stpLimit,
+                  deductible,
+                  toggles: rules,
+                })
+              }
+            >
+              {canEditRules ? "Save & apply rules" : "Read-only for this role"}
             </button>
           </div>
         </div>

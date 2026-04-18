@@ -10,6 +10,7 @@ export function FeatureCard({ title, copy }) {
 }
 
 export {
+  ClaimSwitcher,
   MetricCard,
   ConfidenceCard,
   Field,

@@ -1,7 +1,11 @@
 import { C } from "../theme";
+import { getPlaybook } from "../playbooks";
 import { FeatureCard, MetricCard, Tag } from "./PagePieces";
 
-export default function LandingScreen({ onPrimary, onSecondary }) {
+export default function LandingScreen({ dashboard, onPrimary, onSecondary, secondaryLabel = "View reviewer path" }) {
+  const metrics = dashboard?.metrics;
+  const supported = ["health", "motor", "home", "life"];
+
   return (
     <section
       style={{
@@ -31,6 +35,7 @@ export default function LandingScreen({ onPrimary, onSecondary }) {
             ["Clarification Recovery", "blue"],
             ["Fraud Heatmap", "amber"],
             ["Payout Breakdown", "teal"],
+            ["Health / Motor / Home / Life", "green"],
           ].map(([l, t]) => (
             <Tag key={l} label={l} tone={t} />
           ))}
@@ -48,21 +53,26 @@ export default function LandingScreen({ onPrimary, onSecondary }) {
             Open demo workflow →
           </button>
           <button className="btn btn-secondary" style={{ background: "rgba(255,255,255,.12)", color: "#fff", borderColor: "rgba(255,255,255,.18)" }} onClick={onSecondary}>
-            View reviewer path
+            {secondaryLabel}
           </button>
         </div>
         <p style={{ marginTop: 16, fontSize: 13, color: "#b7d7d4", fontWeight: 600 }}>Built for trust: safe automation, not black-box approvals.</p>
+        <div style={{ marginTop: 24, display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, maxWidth: 760 }}>
+          {supported.map((type) => (
+            <FeatureCard key={type} title={getPlaybook(type).marketingLabel} copy={getPlaybook(type).statusHelp} />
+          ))}
+        </div>
       </div>
       <aside className="rise-in" style={{ padding: 22, borderRadius: 24, background: "rgba(255,255,255,.97)", color: C.text, boxShadow: "0 24px 60px rgba(15,35,66,.18)", animationDelay: "80ms" }}>
         <h2 style={{ fontSize: 16, fontWeight: 800, color: C.navy, marginBottom: 16 }}>Judge-facing wow moments</h2>
         <div style={{ display: "grid", gap: 12, marginBottom: 20 }}>
-          <MetricCard label="Decision confidence" value="91%" accent="blue" />
-          <MetricCard label="Clarification loop" value="1 tap" accent="teal" />
-          <MetricCard label="STP rate" value="82%" accent="green" delta="+4% this month" />
+          <MetricCard label="Claims in engine" value={metrics ? String(metrics.claimsProcessed) : "…"} accent="blue" />
+          <MetricCard label="Clarification rate" value={metrics ? `${metrics.clarificationRate}%` : "…"} accent="teal" />
+          <MetricCard label="STP rate" value={metrics ? `${metrics.stpRate}%` : "…"} accent="green" delta="+4% this month" />
         </div>
         <div style={{ padding: 16, borderRadius: 16, background: C.surfaceSoft, border: `1px solid ${C.border}` }}>
           <h3 style={{ fontSize: 13, fontWeight: 800, marginBottom: 12, color: C.navy }}>Demo sequence</h3>
-          {["Upload blurred hospital bill", "Live feed detects low confidence", "Clarification prompt appears", "Claim resumes to payout or review", "Fraud heatmap explains escalation"].map((step, i) => (
+          {getPlaybook("health").heroSequence.map((step, i) => (
             <div key={step} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: i < 4 ? `1px solid ${C.border}` : "none" }}>
               <span style={{ minWidth: 20, height: 20, borderRadius: "50%", background: C.blueL, color: C.blue, fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{i + 1}</span>
               <span style={{ fontSize: 13, color: C.muted }}>{step}</span>
