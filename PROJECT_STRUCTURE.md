@@ -8,6 +8,7 @@ This document describes the current codebase structure for `ClaimSwift AI`, incl
 claimSwift_AI/
 ├── README.md
 ├── PROJECT_STRUCTURE.md
+├── PRODUCTION_READINESS_CHECKLIST.md
 ├── package.json
 ├── .gitignore
 ├── FINAL_CLAIMS_AUTOMATION_SUBMISSION.md
@@ -25,6 +26,9 @@ claimSwift_AI/
 
 - `PROJECT_STRUCTURE.md`
   This file. High-level structure and responsibility map for the project.
+
+- `PRODUCTION_READINESS_CHECKLIST.md`
+  Production-gap and rollout checklist for taking the project beyond demo mode.
 
 - `package.json`
   Root-level workspace scripts.
@@ -274,6 +278,11 @@ The frontend is a React + Vite app that provides:
 - `frontend/src/claimswift/components/GlobalStyles.jsx`
   Global app styles and shared utility classes.
 
+  Includes:
+  - layout and theme-wide base styles
+  - motion and utility classes
+  - celebration/confetti-style animation helpers used by claimant outcome screens
+
 - `frontend/src/claimswift/components/ui.jsx`
   Reusable UI primitives such as:
   - tags
@@ -298,10 +307,13 @@ The frontend is a React + Vite app that provides:
   Main claim submission and sample-journey screen.
 
   Current responsibilities:
-  - guided 3-step claim creation
+  - guided 5-step claimant journey
+  - visible progress header across the journey
   - document upload and mock analysis
+  - claim detail confirmation
   - short processing animation after submission
   - single post-submit outcome screen
+  - celebratory approval state with payout emphasis
   - advanced demo options
   - sample-claim flow switching
 
@@ -389,6 +401,8 @@ scripts/
 
 - Claim submission and UX:
   - `frontend/src/claimswift/pages/IntakeScreen.jsx`
+  - `frontend/src/claimswift/playbooks.js`
+  - `frontend/src/claimswift/components/GlobalStyles.jsx`
 
 - Session and screen orchestration:
   - `frontend/src/ClaimSwiftAI.jsx`

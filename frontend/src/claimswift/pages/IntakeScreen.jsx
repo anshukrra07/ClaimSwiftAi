@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { C, card } from "../theme";
 import { formatInr, formatPercent, riskTone } from "../formatters";
 import { getInsurancePalette, getPlaybook } from "../playbooks";
@@ -26,6 +26,20 @@ const PROCESSING_STEPS = [
     note: "We are deciding if the claim can move ahead, needs one more detail, or should go to a specialist.",
   },
 ];
+
+const CLAIM_TYPE_META = {
+  health: { icon: "🏥", tone: "teal", label: "Health" },
+  motor: { icon: "🚗", tone: "blue", label: "Motor" },
+  home: { icon: "🏠", tone: "amber", label: "Home" },
+  life: { icon: "❤️", tone: "rose", label: "Life" },
+};
+
+function toneColors(tone) {
+  if (tone === "teal") return { bg: C.tealL, text: C.tealD, soft: "rgba(0,168,150,.12)" };
+  if (tone === "amber") return { bg: C.amberL, text: C.amber, soft: "rgba(183,121,31,.12)" };
+  if (tone === "blue") return { bg: C.blueL, text: C.blue, soft: "rgba(49,86,211,.12)" };
+  return { bg: C.surfaceSoft, text: C.navy, soft: "rgba(15,35,66,.08)" };
+}
 
 function buildDraft(type) {
   const playbook = getPlaybook(type);
@@ -130,12 +144,15 @@ function outcomeForClaim(claim) {
 
 function ClaimTypeCard({ type, active, onSelect }) {
   const playbook = getPlaybook(type);
+  const meta = CLAIM_TYPE_META[type] || { icon: "•", tone: getInsurancePalette(type), label: playbook.marketingLabel };
   const accent = {
     teal: C.teal,
     blue: C.blue,
     amber: C.amber,
     navy: C.navy,
-  }[getInsurancePalette(type)] || C.blue;
+    rose: C.rose,
+  }[meta.tone] || C.blue;
+  const colors = toneColors(meta.tone);
 
   return (
     <button
@@ -145,7 +162,7 @@ function ClaimTypeCard({ type, active, onSelect }) {
         padding: 20,
         borderRadius: 22,
         border: `1.5px solid ${active ? accent : C.border}`,
-        background: active ? C.surface : C.surfaceSoft,
+        background: active ? colors.bg : C.surface,
         boxShadow: active ? `0 0 0 6px ${accent}1f` : "none",
         transition: "all 180ms ease",
       }}
@@ -155,19 +172,19 @@ function ClaimTypeCard({ type, active, onSelect }) {
           width: 48,
           height: 48,
           borderRadius: 16,
-          background: active ? accent : "#e9eef6",
-          color: active ? "#fff" : C.text,
+          background: active ? accent : colors.bg,
+          color: active ? "#fff" : colors.text,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          fontSize: 18,
+          fontSize: 24,
           fontWeight: 800,
           marginBottom: 14,
         }}
       >
-        {playbook.marketingLabel.split(" ")[0][0]}
+        {meta.icon}
       </div>
-      <strong style={{ display: "block", fontSize: 15, color: C.text, marginBottom: 8 }}>{playbook.marketingLabel}</strong>
+      <strong style={{ display: "block", fontSize: 15, color: C.text, marginBottom: 8 }}>{meta.label}</strong>
       <p style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>{playbook.claimantSummary}</p>
       {active ? <div style={{ marginTop: 12 }}><Tag label="Great choice" tone="teal" /></div> : null}
     </button>
@@ -178,7 +195,7 @@ function ProgressHeader({ currentStep }) {
   const progress = ((currentStep - 1) / (JOURNEY_STEPS.length - 1)) * 100;
 
   return (
-    <div style={{ ...card, background: "linear-gradient(135deg,#0f2342,#1a2a4d)", color: "#f7fbff", display: "grid", gap: 16 }}>
+    <div style={{ ...card, background: "linear-gradient(135deg,#0f2342,#162540 55%,#1e3356)", color: "#f7fbff", display: "grid", gap: 18, boxShadow: "0 16px 56px rgba(11,24,41,.12)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
         <div>
           <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#90ddd4", marginBottom: 8 }}>
@@ -187,6 +204,9 @@ function ProgressHeader({ currentStep }) {
           <h2 style={{ fontSize: "clamp(1.5rem,2vw,2rem)", fontWeight: 800, lineHeight: 1.1 }}>
             {JOURNEY_STEPS.find((step) => step.id === currentStep)?.title}
           </h2>
+          <p style={{ marginTop: 8, fontSize: 13.5, color: "rgba(247,251,255,.68)", maxWidth: 720, lineHeight: 1.65 }}>
+            {JOURNEY_STEPS.find((step) => step.id === currentStep)?.note}
+          </p>
         </div>
         <Tag label={`${Math.round(progress)}% complete`} tone="teal" />
       </div>
@@ -201,21 +221,159 @@ function ProgressHeader({ currentStep }) {
             <div
               key={step.id}
               style={{
-                padding: 14,
-                borderRadius: 18,
-                border: "1px solid rgba(255,255,255,.08)",
-                background: active ? "rgba(255,255,255,.1)" : done ? "rgba(0,168,150,.12)" : "rgba(255,255,255,.04)",
+                padding: "8px 10px 0",
+                borderTop: active ? "2px solid #00b896" : done ? "2px solid rgba(0,184,150,.55)" : "2px solid rgba(255,255,255,.08)",
               }}
             >
-              <div style={{ width: 30, height: 30, borderRadius: "50%", background: done ? C.teal : active ? C.blue : "rgba(255,255,255,.12)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13, marginBottom: 10 }}>
-                {done ? "✓" : step.id}
+              <div style={{ fontSize: 11.5, fontWeight: active || done ? 700 : 500, color: active ? "#fff" : done ? "#90ddd4" : "rgba(247,251,255,.52)" }}>
+                {step.id}. {step.title.replace("We are checking it", "Review").replace("Your result", "Done").replace("Choose claim type", "Type").replace("Upload documents", "Upload").replace("Confirm details", "Details")}
+                {done ? " ✓" : active ? " →" : ""}
               </div>
-              <strong style={{ display: "block", fontSize: 13, marginBottom: 6 }}>{step.title}</strong>
-              <p style={{ fontSize: 11.5, color: "rgba(247,251,255,.68)", lineHeight: 1.5 }}>{step.note}</p>
             </div>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function UploadChecklistItem({ item, analysis }) {
+  const matchedDoc = analysis?.documents?.find((doc) => doc.recognizedAs.toLowerCase() === item.toLowerCase()) || null;
+  const suggested = analysis?.missingDocuments?.includes(item.toLowerCase()) || false;
+  const state = matchedDoc ? "matched" : suggested ? "suggested" : "neutral";
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "10px 0",
+        borderBottom: `1px solid ${C.border}`,
+      }}
+    >
+      <div
+        style={{
+          width: 26,
+          height: 26,
+          borderRadius: 9,
+          background: state === "matched" ? C.green : state === "suggested" ? C.amberL : C.surfaceSoft,
+          color: state === "matched" ? "#fff" : state === "suggested" ? C.amber : C.muted,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 13,
+          fontWeight: 800,
+        }}
+      >
+        {state === "matched" ? "✓" : state === "suggested" ? "?" : "•"}
+      </div>
+      <div style={{ flex: 1 }}>
+        <strong style={{ display: "block", fontSize: 12.5, color: C.text }}>{item}</strong>
+        <span style={{ fontSize: 12.5, color: C.muted }}>
+          {state === "matched"
+            ? `Found in your upload${matchedDoc?.name ? ` · ${matchedDoc.name}` : ""}`
+            : state === "suggested"
+              ? "Would help us move faster"
+              : "Useful if you have it"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function buildTimeline(status) {
+  if (status === "settled") {
+    return [
+      { label: "Submitted", state: "done" },
+      { label: "Checked", state: "done" },
+      { label: "Approved", state: "done" },
+      { label: "Paid", state: "done" },
+    ];
+  }
+  if (status === "approved_for_stp") {
+    return [
+      { label: "Submitted", state: "done" },
+      { label: "Checked", state: "done" },
+      { label: "Approved", state: "active" },
+      { label: "Paid", state: "wait" },
+    ];
+  }
+  if (status === "clarification_required") {
+    return [
+      { label: "Submitted", state: "done" },
+      { label: "Checked", state: "done" },
+      { label: "Need detail", state: "active" },
+      { label: "Done", state: "wait" },
+    ];
+  }
+  if (status === "human_review" || status === "verification_queue") {
+    return [
+      { label: "Submitted", state: "done" },
+      { label: "Checked", state: "done" },
+      { label: "In review", state: "active" },
+      { label: "Done", state: "wait" },
+    ];
+  }
+  return [
+    { label: "Submitted", state: "done" },
+    { label: "Checking", state: "active" },
+    { label: "Next step", state: "wait" },
+  ];
+}
+
+function StatusTimeline({ status }) {
+  const nodes = buildTimeline(status);
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+      {nodes.map((node, index) => {
+        const isDone = node.state === "done";
+        const isActive = node.state === "active";
+        const bg = isDone ? C.green : isActive ? C.teal : C.surfaceSoft;
+        const color = isDone || isActive ? "#fff" : C.muted;
+        const border = isDone || isActive ? "none" : `1.5px solid ${C.border}`;
+        const connectorDone = isDone || (index < nodes.findIndex((item) => item.state === "active") && nodes.some((item) => item.state === "active"));
+
+        return (
+          <div key={node.label} style={{ display: "contents" }}>
+            <div key={node.label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, flex: 1 }}>
+              <div
+                className={isActive ? "glow-pulse" : undefined}
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: "50%",
+                  background: bg,
+                  color,
+                  border,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 13,
+                  fontWeight: 800,
+                }}
+              >
+                {isDone ? "✓" : index + 1}
+              </div>
+              <div style={{ fontSize: 10.5, fontWeight: isActive || isDone ? 700 : 500, color: isActive ? C.navy : isDone ? C.tealD : C.muted, textAlign: "center" }}>
+                {node.label}
+              </div>
+            </div>
+            {index < nodes.length - 1 ? (
+              <div
+                style={{
+                  height: 2,
+                  flex: 1,
+                  minWidth: 24,
+                  background: connectorDone ? C.green : C.border,
+                  marginBottom: 18,
+                }}
+              />
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -399,6 +557,12 @@ export default function IntakeScreen({
               <ClaimTypeCard key={type} type={type} active={draft.insuranceType === type} onSelect={handleTypeSelect} />
             ))}
           </div>
+          <div style={{ padding: 18, borderRadius: 20, background: "linear-gradient(135deg,#f4fffc,#eefbf7)", border: `1px solid rgba(0,168,150,.18)`, display: "grid", gap: 6 }}>
+            <strong style={{ fontSize: 14, color: C.tealD }}>Your claim is safe with us</strong>
+            <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.65 }}>
+              We only ask for the details needed for your claim type. Technical fraud and review labels stay in the insurer workspace, not in the claimant flow.
+            </p>
+          </div>
         </div>
       ) : null}
 
@@ -430,21 +594,9 @@ export default function IntakeScreen({
             <div style={{ padding: 20, borderRadius: 22, border: `1px solid ${C.border}`, background: C.surface }}>
               <strong style={{ display: "block", fontSize: 14, color: C.text, marginBottom: 12 }}>What helps for this claim</strong>
               <div style={{ display: "grid", gap: 10 }}>
-                {draftPlaybook.claimantChecklist.map((item) => {
-                  const matched = analysis?.documents?.some((doc) => doc.recognizedAs.toLowerCase() === item.toLowerCase()) || false;
-                  const suggested = analysis?.missingDocuments?.includes(item.toLowerCase()) || false;
-                  return (
-                    <div key={item} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
-                      <div style={{ width: 22, height: 22, borderRadius: 8, background: matched ? C.green : suggested ? C.amberL : C.surfaceSoft, color: matched ? "#fff" : suggested ? C.amber : C.muted, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800 }}>
-                        {matched ? "✓" : suggested ? "?" : "•"}
-                      </div>
-                      <div style={{ fontSize: 12.5, color: C.muted }}>
-                        <strong style={{ display: "block", fontSize: 12.5, color: C.text }}>{item}</strong>
-                        <span>{matched ? "Found in your upload" : suggested ? "Would help us move faster" : "Useful if you have it"}</span>
-                      </div>
-                    </div>
-                  );
-                })}
+                {draftPlaybook.claimantChecklist.map((item) => (
+                  <UploadChecklistItem key={item} item={item} analysis={analysis} />
+                ))}
               </div>
             </div>
           </div>
@@ -466,6 +618,23 @@ export default function IntakeScreen({
             <div style={{ padding: 20, borderRadius: 22, border: `1px solid ${C.border}`, background: analysisSummary.tone === "teal" ? "linear-gradient(135deg,#f4fffc,#eefbf7)" : analysisSummary.tone === "amber" ? "linear-gradient(135deg,#fffdf4,#fff8eb)" : "linear-gradient(135deg,#f5f9ff,#edf4ff)" }}>
               <Tag label={analysisSummary.title} tone={analysisSummary.tone} />
               <p style={{ marginTop: 12, fontSize: 13.5, color: C.muted, lineHeight: 1.65 }}>{analysisSummary.note}</p>
+            </div>
+          ) : null}
+
+          {analysis?.documents?.length ? (
+            <div style={{ ...card, padding: 18, background: C.surface }}>
+              <strong style={{ display: "block", fontSize: 13.5, color: C.text, marginBottom: 12 }}>What we found in your files</strong>
+              <div style={{ display: "grid", gap: 10 }}>
+                {analysis.documents.map((doc) => (
+                  <div key={`${doc.name}-${doc.recognizedAs}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", padding: "12px 14px", borderRadius: 16, background: C.surfaceSoft, border: `1px solid ${C.border}` }}>
+                    <div>
+                      <strong style={{ display: "block", fontSize: 12.5, color: C.text }}>{doc.recognizedAs}</strong>
+                      <span style={{ fontSize: 12.5, color: C.muted }}>{doc.name}</span>
+                    </div>
+                    <Tag label="Read successfully" tone="green" />
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
         </div>
@@ -700,6 +869,11 @@ export default function IntakeScreen({
                 ) : null}
               </div>
             </div>
+          </div>
+
+          <div style={{ padding: 18, borderRadius: 20, border: `1px solid ${C.border}`, background: C.surface }}>
+            <strong style={{ display: "block", fontSize: 13.5, color: C.text, marginBottom: 14 }}>Your claim journey</strong>
+            <StatusTimeline status={submissionResult.status} />
           </div>
 
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>

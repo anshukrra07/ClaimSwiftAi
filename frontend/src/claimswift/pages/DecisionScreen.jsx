@@ -3,6 +3,65 @@ import { formatInr, riskTone } from "../formatters";
 import { getInsurancePalette, getPlaybook } from "../playbooks";
 import { ClaimSwitcher, MetricCard, PageHeader, ProcessingPanel, ReceiptRow, Tag } from "./PagePieces";
 
+function decisionTimeline(status) {
+  if (status === "settled") {
+    return [
+      { label: "Submitted", state: "done" },
+      { label: "Checked", state: "done" },
+      { label: "Approved", state: "done" },
+      { label: "Paid", state: "done" },
+    ];
+  }
+
+  return [
+    { label: "Submitted", state: "done" },
+    { label: "Checked", state: "done" },
+    { label: "Approved", state: "active" },
+    { label: "Paid", state: "wait" },
+  ];
+}
+
+function DecisionTimeline({ status }) {
+  const nodes = decisionTimeline(status);
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+      {nodes.map((node, index) => {
+        const isDone = node.state === "done";
+        const isActive = node.state === "active";
+        return (
+          <div key={node.label} style={{ display: "contents" }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, flex: 1 }}>
+              <div
+                className={isActive ? "glow-pulse" : undefined}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: "50%",
+                  background: isDone ? C.green : isActive ? C.teal : C.surfaceSoft,
+                  color: isDone || isActive ? "#fff" : C.muted,
+                  border: isDone || isActive ? "none" : `1.5px solid ${C.border}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 800,
+                  fontSize: 13,
+                }}
+              >
+                {isDone ? "✓" : index + 1}
+              </div>
+              <div style={{ fontSize: 10.5, fontWeight: isActive || isDone ? 700 : 500, color: isActive ? C.navy : isDone ? C.tealD : C.muted, textAlign: "center" }}>
+                {node.label}
+              </div>
+            </div>
+            {index < nodes.length - 1 ? <div style={{ height: 2, flex: 1, minWidth: 24, background: isDone ? C.green : C.border, marginBottom: 18 }} /> : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function DecisionScreen({ claim, claimOptions, onSelectClaim, policyRules, onShowReview, onSettle, canSettle, canOpenReview }) {
   if (!claim) {
     return <section style={{ display: "grid", gap: 18 }}><PageHeader title="Decision Dashboard & Explanation" copy="No approved claim is available yet." /></section>;
@@ -29,6 +88,10 @@ export default function DecisionScreen({ claim, claimOptions, onSelectClaim, pol
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <MetricCard label="Estimated payout" value={formatInr(claim.payableAmount)} accent="teal" />
             <MetricCard label="Fraud band" value={claim.fraudBand.toUpperCase()} accent={riskTone(claim.fraudBand)} note={`Risk score ${claim.fraudScore}/100`} />
+          </div>
+          <div style={{ marginTop: 18, padding: 18, borderRadius: 18, border: `1px solid ${C.border}`, background: C.surfaceSoft }}>
+            <strong style={{ display: "block", fontSize: 13.5, color: C.text, marginBottom: 12 }}>Claim journey</strong>
+            <DecisionTimeline status={claim.status} />
           </div>
         </div>
         <div style={card}>

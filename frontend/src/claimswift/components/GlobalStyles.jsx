@@ -3,8 +3,10 @@ import { C } from "../theme";
 export default function GlobalStyles() {
   return (
     <style>{`
+      @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Instrument+Sans:wght@400;500;600;700&display=swap');
       *{box-sizing:border-box;margin:0;padding:0}
-      body{font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:${C.text};background:${C.bg};line-height:1.5;-webkit-font-smoothing:antialiased}
+      body{font-family:'Instrument Sans',Inter,ui-sans-serif,system-ui,sans-serif;color:${C.text};background:${C.bg};line-height:1.5;-webkit-font-smoothing:antialiased}
+      h1,h2,h3,h4,h5,h6{font-family:'Syne','Instrument Sans',Inter,ui-sans-serif,sans-serif;letter-spacing:-.025em}
       button{cursor:pointer;font:inherit;border:none;background:none}
       @keyframes riseIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
       @keyframes screenIn{from{opacity:0;transform:translateY(8px) scale(.995)}to{opacity:1;transform:none}}
