@@ -4,6 +4,29 @@ import { formatInr, formatPercent, riskTone } from "../formatters";
 import { getInsurancePalette, getPlaybook } from "../playbooks";
 import { ClaimSwitcher, ConfidenceCard, Field, PageHeader, ProcessingPanel, Tag } from "./PagePieces";
 
+const JOURNEY_STEPS = [
+  { id: 1, title: "Choose claim type", note: "Pick the kind of claim you want to file." },
+  { id: 2, title: "Upload documents", note: "Upload what you have and we will tell you what helps." },
+  { id: 3, title: "Confirm details", note: "Check the key details before submitting." },
+  { id: 4, title: "We are checking it", note: "A short live processing view keeps the next step visible." },
+  { id: 5, title: "Your result", note: "See approval, clarification, or review in one place." },
+];
+
+const PROCESSING_STEPS = [
+  {
+    title: "Reading your documents",
+    note: "We are picking out the bill amount, provider, and main claim details.",
+  },
+  {
+    title: "Checking your cover",
+    note: "We are matching the claim against the policy and uploaded evidence.",
+  },
+  {
+    title: "Choosing the next step",
+    note: "We are deciding if the claim can move ahead, needs one more detail, or should go to a specialist.",
+  },
+];
+
 function buildDraft(type) {
   const playbook = getPlaybook(type);
   return {
@@ -24,8 +47,8 @@ function pathSummary(analysis) {
   if (analysis.recommendedScenario === "clean") {
     return {
       tone: "teal",
-      title: "Looks good to submit",
-      note: "The uploaded package looks complete enough to continue without extra questions.",
+      title: "Looks good to continue",
+      note: "The uploaded package looks complete enough to move ahead without extra questions right now.",
     };
   }
   if (analysis.recommendedScenario === "clarification") {
@@ -33,79 +56,167 @@ function pathSummary(analysis) {
       tone: "amber",
       title: "We may need one more detail",
       note: analysis.missingDocuments?.length
-        ? `Before final approval, we may ask for ${analysis.missingDocuments.join(", ")}.`
-        : "One field looks unclear, so we may ask for a quick confirmation after submission.",
+        ? `Before approval, we may ask for ${analysis.missingDocuments.join(", ")}.`
+        : "One part of the document looks unclear, so we may ask a quick follow-up question.",
     };
   }
   return {
-    tone: "rose",
-    title: "This claim may need manual review",
-    note: "The uploaded evidence shows a pattern that may need a reviewer before payment.",
+    tone: "blue",
+    title: "This claim may need a specialist",
+    note: "One part of the evidence may need a manual check before payment.",
   };
 }
 
-function StepPill({ number, title, note, active, done }) {
-  return (
-    <div
-      style={{
-        padding: 16,
-        borderRadius: 18,
-        border: `1px solid ${active ? "rgba(49,86,211,.28)" : C.border}`,
-        background: active ? C.blueL : C.surface,
-      }}
-    >
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 8 }}>
-        <div
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: "50%",
-            background: done ? C.teal : active ? C.blue : C.surfaceSoft,
-            color: done || active ? "#fff" : C.muted,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 13,
-            fontWeight: 800,
-          }}
-        >
-          {done ? "✓" : number}
-        </div>
-        <strong style={{ fontSize: 14, color: C.text }}>{title}</strong>
-      </div>
-      <p style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.55 }}>{note}</p>
-    </div>
-  );
+function outcomeForClaim(claim) {
+  if (!claim) return null;
+
+  if (claim.status === "approved_for_stp" || claim.status === "settled") {
+    return {
+      tone: "teal",
+      badge: claim.status === "settled" ? "Paid" : "Approved",
+      title: claim.status === "settled" ? "Your claim is complete" : "Your claim is approved",
+      note:
+        claim.status === "settled"
+          ? "The payment step is complete and the claim has been closed successfully."
+          : "Your documents and claim details look good, so the claim can move ahead without extra paperwork.",
+      nextStep:
+        claim.status === "settled"
+          ? "You can now view the final payment details."
+          : "Money is on its way. You can now view the payment amount and what happens next.",
+      primaryAction: "View decision",
+      highlight:
+        claim.status === "settled"
+          ? "Payment completed"
+          : "Expected in 2 business days",
+    };
+  }
+
+  if (claim.status === "clarification_required") {
+    return {
+      tone: "amber",
+      badge: "Almost there",
+      title: "We just need one small detail",
+      note:
+        claim.missingDocuments?.length
+          ? `Please add or confirm: ${claim.missingDocuments.join(", ")}.`
+          : "One important part of your claim could not be read clearly, so we need a quick confirmation.",
+      nextStep: "Once you confirm it, the claim continues automatically. You do not need to start over.",
+      primaryAction: "Fix claim",
+    };
+  }
+
+  if (claim.status === "human_review" || claim.status === "verification_queue") {
+    return {
+      tone: "blue",
+      badge: "Under review",
+      title: "Your claim is with our team",
+      note: "We are taking extra care with this claim, so one of our specialists will review it before the next step.",
+      nextStep: "You do not need to do anything right now. The claim is already in the review queue.",
+      primaryAction: "View next step",
+      highlight: "Usually reviewed within 24 hours",
+    };
+  }
+
+  return {
+    tone: "navy",
+    badge: "Received",
+    title: "Your claim has been submitted",
+    note: "We have received the claim and are working out the next step.",
+    nextStep: "You can track the current status from the claim workspace.",
+    primaryAction: "View claim",
+    highlight: "We will keep you updated",
+  };
 }
 
-function InsuranceCard({ type, active, onSelect }) {
+function ClaimTypeCard({ type, active, onSelect }) {
   const playbook = getPlaybook(type);
-  const tone = getInsurancePalette(type);
   const accent = {
     teal: C.teal,
     blue: C.blue,
     amber: C.amber,
     navy: C.navy,
-  }[tone] || C.blue;
+  }[getInsurancePalette(type)] || C.blue;
 
   return (
     <button
       onClick={() => onSelect(type)}
       style={{
         textAlign: "left",
-        borderRadius: 18,
-        border: `1px solid ${active ? accent : C.border}`,
+        padding: 20,
+        borderRadius: 22,
+        border: `1.5px solid ${active ? accent : C.border}`,
         background: active ? C.surface : C.surfaceSoft,
-        padding: 16,
-        cursor: "pointer",
+        boxShadow: active ? `0 0 0 6px ${accent}1f` : "none",
+        transition: "all 180ms ease",
       }}
     >
-      <div style={{ width: 42, height: 42, borderRadius: 14, background: active ? accent : "#e9eef6", color: active ? "#fff" : C.text, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, marginBottom: 12 }}>
+      <div
+        style={{
+          width: 48,
+          height: 48,
+          borderRadius: 16,
+          background: active ? accent : "#e9eef6",
+          color: active ? "#fff" : C.text,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 18,
+          fontWeight: 800,
+          marginBottom: 14,
+        }}
+      >
         {playbook.marketingLabel.split(" ")[0][0]}
       </div>
-      <strong style={{ display: "block", fontSize: 14, color: C.text, marginBottom: 6 }}>{playbook.marketingLabel}</strong>
-      <p style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.55 }}>{playbook.claimantSummary}</p>
+      <strong style={{ display: "block", fontSize: 15, color: C.text, marginBottom: 8 }}>{playbook.marketingLabel}</strong>
+      <p style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>{playbook.claimantSummary}</p>
+      {active ? <div style={{ marginTop: 12 }}><Tag label="Great choice" tone="teal" /></div> : null}
     </button>
+  );
+}
+
+function ProgressHeader({ currentStep }) {
+  const progress = ((currentStep - 1) / (JOURNEY_STEPS.length - 1)) * 100;
+
+  return (
+    <div style={{ ...card, background: "linear-gradient(135deg,#0f2342,#1a2a4d)", color: "#f7fbff", display: "grid", gap: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#90ddd4", marginBottom: 8 }}>
+            Step {currentStep} of {JOURNEY_STEPS.length}
+          </div>
+          <h2 style={{ fontSize: "clamp(1.5rem,2vw,2rem)", fontWeight: 800, lineHeight: 1.1 }}>
+            {JOURNEY_STEPS.find((step) => step.id === currentStep)?.title}
+          </h2>
+        </div>
+        <Tag label={`${Math.round(progress)}% complete`} tone="teal" />
+      </div>
+      <div style={{ height: 8, borderRadius: 999, background: "rgba(255,255,255,.12)", overflow: "hidden" }}>
+        <div style={{ width: `${progress}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg,#00a896,#5dd7c7)", transition: "width 300ms ease" }} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5,minmax(0,1fr))", gap: 10 }}>
+        {JOURNEY_STEPS.map((step) => {
+          const active = currentStep === step.id;
+          const done = currentStep > step.id;
+          return (
+            <div
+              key={step.id}
+              style={{
+                padding: 14,
+                borderRadius: 18,
+                border: "1px solid rgba(255,255,255,.08)",
+                background: active ? "rgba(255,255,255,.1)" : done ? "rgba(0,168,150,.12)" : "rgba(255,255,255,.04)",
+              }}
+            >
+              <div style={{ width: 30, height: 30, borderRadius: "50%", background: done ? C.teal : active ? C.blue : "rgba(255,255,255,.12)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13, marginBottom: 10 }}>
+                {done ? "✓" : step.id}
+              </div>
+              <strong style={{ display: "block", fontSize: 13, marginBottom: 6 }}>{step.title}</strong>
+              <p style={{ fontSize: 11.5, color: "rgba(247,251,255,.68)", lineHeight: 1.5 }}>{step.note}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -126,29 +237,26 @@ export default function IntakeScreen({
   canClarifyClaim,
   canRouteReview,
 }) {
-  const scenarioLabel =
-    claim?.statusLabel ||
-    (intakeMode === "approved" ? "Ready for payment" : intakeMode === "review" ? "Needs review" : "Needs clarification");
-  const scenarioTone = claim ? riskTone(claim.fraudBand) : intakeMode === "approved" ? "teal" : intakeMode === "review" ? "rose" : "amber";
-  const firstLowConfidence = claim?.lowConfidenceFields?.[0];
-  const secondLowConfidence = claim?.lowConfidenceFields?.[1];
-  const investigationNote = claim?.crossDocumentMismatches?.[0] || claim?.explanationSummary || "No active investigation notes.";
   const [draft, setDraft] = useState(buildDraft("health"));
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [analysis, setAnalysis] = useState(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [submissionPhase, setSubmissionPhase] = useState("idle");
+  const [submissionProgress, setSubmissionProgress] = useState(0);
+  const [submissionResult, setSubmissionResult] = useState(null);
+  const [currentStep, setCurrentStep] = useState(1);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   const draftPlaybook = getPlaybook(draft.insuranceType);
   const activePlaybook = getPlaybook(claim?.insuranceType || draft.insuranceType);
   const analysisSummary = pathSummary(analysis);
+  const outcome = outcomeForClaim(submissionResult);
 
-  const completedSteps = useMemo(() => {
-    let count = 1;
-    if (selectedFiles.length) count += 1;
-    if (draft.claimantName && draft.claimAmount && draft.policyNumber) count += 1;
-    return Math.min(count, 3);
-  }, [draft.claimAmount, draft.claimantName, draft.policyNumber, selectedFiles.length]);
+  const activeReviewStep = Math.min(PROCESSING_STEPS.length - 1, Math.floor(submissionProgress * PROCESSING_STEPS.length));
+
+  const reviewClaim = claimOptions.find((item) => item.status === "human_review" || item.status === "verification_queue") || null;
+  const approvedClaim = claimOptions.find((item) => item.status === "approved_for_stp" || item.status === "settled") || null;
+  const clarificationClaim = claimOptions.find((item) => item.status === "clarification_required") || null;
 
   useEffect(() => {
     const next = buildDraft(draft.insuranceType);
@@ -164,6 +272,21 @@ export default function IntakeScreen({
     setAnalysis(null);
     setSelectedFiles([]);
   }, [draft.insuranceType]);
+
+  useEffect(() => {
+    if (submissionPhase !== "processing") return undefined;
+    const startedAt = Date.now();
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      setSubmissionProgress(Math.min(elapsed / 3000, 1));
+    }, 90);
+    return () => clearInterval(interval);
+  }, [submissionPhase]);
+
+  const handleTypeSelect = (type) => {
+    setDraft((current) => ({ ...current, insuranceType: type }));
+    setTimeout(() => setCurrentStep(2), 400);
+  };
 
   const handleAnalyzeDocuments = async () => {
     setAnalysisLoading(true);
@@ -184,273 +307,470 @@ export default function IntakeScreen({
         claimAmount: String(result.analysis.extractedDraft.claimAmount),
         policyAgeDays: String(result.analysis.extractedDraft.policyAgeDays),
       }));
+      setTimeout(() => setCurrentStep(3), 450);
     } finally {
       setAnalysisLoading(false);
     }
   };
 
+  const handleSubmitClaim = async () => {
+    setSubmissionPhase("processing");
+    setSubmissionProgress(0);
+    setSubmissionResult(null);
+    setCurrentStep(4);
+
+    try {
+      const [response] = await Promise.all([
+        onCreateClaim({
+          ...draft,
+          claimAmount: Number(draft.claimAmount),
+          policyAgeDays: Number(draft.policyAgeDays),
+        }),
+        new Promise((resolve) => setTimeout(resolve, 3000)),
+      ]);
+      setSubmissionResult(response.claim);
+      setSubmissionPhase("result");
+      setCurrentStep(5);
+
+      if (response.claim.status === "clarification_required") {
+        setIntakeMode("clarification");
+      } else if (response.claim.status === "human_review" || response.claim.status === "verification_queue") {
+        setIntakeMode("review");
+      } else {
+        setIntakeMode("approved");
+      }
+    } catch {
+      setSubmissionPhase("idle");
+      setSubmissionProgress(0);
+      setCurrentStep(3);
+    }
+  };
+
+  const openOutcome = () => {
+    if (!submissionResult) return;
+    if (submissionResult.status === "clarification_required") {
+      onClarification();
+      return;
+    }
+    if (submissionResult.status === "human_review" || submissionResult.status === "verification_queue") {
+      onReview();
+      return;
+    }
+    onRunDecision();
+  };
+
+  const resetJourney = () => {
+    setSubmissionPhase("idle");
+    setSubmissionProgress(0);
+    setSubmissionResult(null);
+    setAnalysis(null);
+    setSelectedFiles([]);
+    setCurrentStep(1);
+  };
+
+  const scenarioLabel =
+    claim?.statusLabel ||
+    (intakeMode === "approved" ? "Ready for payment" : intakeMode === "review" ? "Under review" : "Needs one more detail");
+  const scenarioTone = claim ? riskTone(claim.fraudBand) : intakeMode === "approved" ? "teal" : intakeMode === "review" ? "blue" : "amber";
+  const firstLowConfidence = claim?.lowConfidenceFields?.[0];
+  const secondLowConfidence = claim?.lowConfidenceFields?.[1];
+  const investigationNote = claim?.crossDocumentMismatches?.[0] || claim?.explanationSummary || "No active investigation notes.";
+
   return (
     <section style={{ display: "grid", gap: 18 }}>
       <PageHeader
-        title="File a Claim in 3 Simple Steps"
-        copy="Choose the claim type, upload the documents you already have, then confirm the key details. If something is missing, we ask only for that one missing piece."
+        title="Make claiming feel like a conversation, not a form"
+        copy="File the claim in small steps, watch a short live check, and then see one clear outcome in the same place."
       />
 
-      <ClaimSwitcher
-        title="Try sample claim journeys"
-        claims={claimOptions}
-        activeId={claim?.id}
-        onSelect={onSelectClaim}
-        tone={getInsurancePalette(claim?.insuranceType)}
-        subtitle="Open a sample claim to see how clarification, approval, and review work"
-      />
+      <ProgressHeader currentStep={currentStep} />
 
-      <div style={{ ...card, background: "linear-gradient(135deg,#f8fbff,#eef4fd)", display: "grid", gap: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
+      {currentStep === 1 ? (
+        <div style={{ ...card, display: "grid", gap: 18 }}>
           <div>
-            <strong style={{ display: "block", fontSize: 18, color: C.navy, marginBottom: 6 }}>A guided claim experience</strong>
-            <p style={{ fontSize: 13.5, color: C.muted, maxWidth: 760, lineHeight: 1.65 }}>
-              We keep the form short, explain what to upload, and show what happens next in plain language.
+            <Tag label="~10 seconds" tone="teal" />
+            <h2 style={{ fontSize: "clamp(1.7rem,2.5vw,2.3rem)", fontWeight: 800, color: C.navy, margin: "14px 0 8px" }}>Pick your claim type</h2>
+            <p style={{ fontSize: 14, color: C.muted, maxWidth: 760, lineHeight: 1.7 }}>
+              Start with the claim type only. We will show the right checklist and prefill as much as possible from your documents.
             </p>
           </div>
-          <Tag label={`${completedSteps}/3 steps ready`} tone="blue" />
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 12 }}>
-          <StepPill number="1" title="Choose claim type" note="Pick the insurance line that matches your incident." active done />
-          <StepPill number="2" title="Upload your documents" note="Bills, photos, estimates, or policy proof. We will read what we can." active={selectedFiles.length > 0} done={selectedFiles.length > 0} />
-          <StepPill number="3" title="Confirm key details" note="We prefill the basics and keep only a few fields for you to check." active={Boolean(draft.claimantName && draft.claimAmount)} done={Boolean(draft.claimantName && draft.claimAmount && draft.policyNumber)} />
-        </div>
-      </div>
-
-      <div style={{ ...card, display: "grid", gap: 16 }}>
-        <div>
-          <strong style={{ display: "block", fontSize: 16, color: C.text, marginBottom: 4 }}>Step 1: Choose the type of claim</strong>
-          <p style={{ fontSize: 13, color: C.muted }}>Pick the option closest to your claim. We will show the right document checklist automatically.</p>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 12 }}>
-          {["health", "motor", "home", "life"].map((type) => (
-            <InsuranceCard
-              key={type}
-              type={type}
-              active={draft.insuranceType === type}
-              onSelect={(nextType) => setDraft((current) => ({ ...current, insuranceType: nextType }))}
-            />
-          ))}
-        </div>
-        <div style={{ padding: 16, borderRadius: 16, border: `1px solid ${C.border}`, background: C.surfaceSoft }}>
-          <strong style={{ display: "block", fontSize: 13.5, color: C.text, marginBottom: 10 }}>Keep these ready</strong>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 10 }}>
-            {draftPlaybook.claimantChecklist.map((item) => (
-              <div key={item} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13, color: C.muted }}>
-                <span style={{ width: 22, height: 22, borderRadius: "50%", background: C.tealL, color: C.tealD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800 }}>✓</span>
-                <span>{item}</span>
-              </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 14 }}>
+            {["health", "motor", "home", "life"].map((type) => (
+              <ClaimTypeCard key={type} type={type} active={draft.insuranceType === type} onSelect={handleTypeSelect} />
             ))}
           </div>
         </div>
-      </div>
+      ) : null}
 
-      <div style={{ ...card, display: "grid", gap: 16 }}>
-        <div>
-          <strong style={{ display: "block", fontSize: 16, color: C.text, marginBottom: 4 }}>Step 2: Upload the documents you already have</strong>
-          <p style={{ fontSize: 13, color: C.muted }}>
-            You do not need a perfect document pack. Upload what you have now and we will tell you if anything is still needed.
-          </p>
-        </div>
-
-        <div style={{ display: "grid", gap: 12, padding: 16, borderRadius: 18, border: `1px solid ${C.border}`, background: C.surfaceSoft }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-            <div>
-              <strong style={{ display: "block", fontSize: 13.5, color: C.text, marginBottom: 4 }}>Smart document check</strong>
-              <p style={{ fontSize: 12.5, color: C.muted }}>
-                Upload files and we will suggest whether the claim can move ahead directly, may need one quick clarification, or should be reviewed.
-              </p>
-            </div>
-            {analysisSummary ? <Tag label={analysisSummary.title} tone={analysisSummary.tone} /> : <Tag label="Upload files to get a quick check" tone="navy" />}
+      {currentStep === 2 ? (
+        <div style={{ ...card, display: "grid", gap: 18 }}>
+          <div>
+            <Tag label="~30 seconds" tone="amber" />
+            <h2 style={{ fontSize: "clamp(1.7rem,2.5vw,2.3rem)", fontWeight: 800, color: C.navy, margin: "14px 0 8px" }}>Upload what you have</h2>
+            <p style={{ fontSize: 14, color: C.muted, maxWidth: 760, lineHeight: 1.7 }}>
+              Do not worry about uploading the perfect file pack. Bills, receipts, photos, estimates, or policy proof all help us get started.
+            </p>
           </div>
 
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-            <input type="file" multiple onChange={(event) => setSelectedFiles(Array.from(event.target.files || []))} style={{ maxWidth: 360 }} />
-            <button className="btn btn-secondary" onClick={handleAnalyzeDocuments} disabled={!canCreateClaim || !selectedFiles.length || analysisLoading}>
-              {analysisLoading ? "Checking files..." : "Check my documents"}
-            </button>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.25fr) minmax(0,.75fr)", gap: 18 }}>
+            <div style={{ padding: 24, borderRadius: 24, border: `1.5px dashed ${C.border}`, background: "linear-gradient(135deg,#f8fbff,#eef6fb)", display: "grid", gap: 14, justifyItems: "start" }}>
+              <div style={{ width: 56, height: 56, borderRadius: 18, background: C.tealL, color: C.tealD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 800 }}>+</div>
+              <div>
+                <strong style={{ display: "block", fontSize: 16, color: C.text, marginBottom: 6 }}>Upload any documents or photos</strong>
+                <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.65 }}>
+                  {draftPlaybook.claimantSummary}
+                </p>
+              </div>
+              <input type="file" multiple onChange={(event) => setSelectedFiles(Array.from(event.target.files || []))} style={{ maxWidth: 360 }} />
+              <button className="btn btn-teal" disabled={!canCreateClaim || !selectedFiles.length || analysisLoading} onClick={handleAnalyzeDocuments}>
+                {analysisLoading ? "Checking your files..." : "Check my documents"}
+              </button>
+            </div>
+
+            <div style={{ padding: 20, borderRadius: 22, border: `1px solid ${C.border}`, background: C.surface }}>
+              <strong style={{ display: "block", fontSize: 14, color: C.text, marginBottom: 12 }}>What helps for this claim</strong>
+              <div style={{ display: "grid", gap: 10 }}>
+                {draftPlaybook.claimantChecklist.map((item) => {
+                  const matched = analysis?.documents?.some((doc) => doc.recognizedAs.toLowerCase() === item.toLowerCase()) || false;
+                  const suggested = analysis?.missingDocuments?.includes(item.toLowerCase()) || false;
+                  return (
+                    <div key={item} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
+                      <div style={{ width: 22, height: 22, borderRadius: 8, background: matched ? C.green : suggested ? C.amberL : C.surfaceSoft, color: matched ? "#fff" : suggested ? C.amber : C.muted, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800 }}>
+                        {matched ? "✓" : suggested ? "?" : "•"}
+                      </div>
+                      <div style={{ fontSize: 12.5, color: C.muted }}>
+                        <strong style={{ display: "block", fontSize: 12.5, color: C.text }}>{item}</strong>
+                        <span>{matched ? "Found in your upload" : suggested ? "Would help us move faster" : "Useful if you have it"}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
           {selectedFiles.length ? (
-            <div style={{ display: "grid", gap: 8 }}>
-              {selectedFiles.map((file) => (
-                <div key={`${file.name}-${file.lastModified}`} style={{ fontSize: 12.5, color: C.muted }}>
-                  • {file.name} ({Math.max(1, Math.round(file.size / 1024))} KB)
-                </div>
-              ))}
-            </div>
-          ) : null}
-
-          {analysis ? (
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 14 }}>
-              <div style={{ padding: 14, borderRadius: 14, background: C.surface, border: `1px solid ${C.border}` }}>
-                <strong style={{ display: "block", fontSize: 12.5, marginBottom: 8 }}>What we found</strong>
-                <div style={{ fontSize: 12.5, color: C.muted, padding: "4px 0" }}>Confidence: {analysis.confidence}%</div>
-                <div style={{ fontSize: 12.5, color: C.muted, padding: "4px 0" }}>Next step: {analysisSummary?.note}</div>
-                <div style={{ fontSize: 12.5, color: C.muted, padding: "4px 0" }}>
-                  Missing documents: {analysis.missingDocuments.length ? analysis.missingDocuments.join(", ") : "None right now"}
-                </div>
-              </div>
-              <div style={{ padding: 14, borderRadius: 14, background: C.surface, border: `1px solid ${C.border}` }}>
-                <strong style={{ display: "block", fontSize: 12.5, marginBottom: 8 }}>Matched documents</strong>
-                {analysis.documents.map((doc) => (
-                  <div key={doc.name} style={{ fontSize: 12.5, color: C.muted, padding: "4px 0" }}>
-                    • {doc.name} → {doc.recognizedAs}
+            <div style={{ ...card, padding: 18, background: C.surfaceSoft }}>
+              <strong style={{ display: "block", fontSize: 13.5, color: C.text, marginBottom: 10 }}>Files selected</strong>
+              <div style={{ display: "grid", gap: 8 }}>
+                {selectedFiles.map((file) => (
+                  <div key={`${file.name}-${file.lastModified}`} style={{ fontSize: 12.5, color: C.muted }}>
+                    • {file.name} ({Math.max(1, Math.round(file.size / 1024))} KB)
                   </div>
                 ))}
               </div>
             </div>
           ) : null}
+
+          {analysisSummary ? (
+            <div style={{ padding: 20, borderRadius: 22, border: `1px solid ${C.border}`, background: analysisSummary.tone === "teal" ? "linear-gradient(135deg,#f4fffc,#eefbf7)" : analysisSummary.tone === "amber" ? "linear-gradient(135deg,#fffdf4,#fff8eb)" : "linear-gradient(135deg,#f5f9ff,#edf4ff)" }}>
+              <Tag label={analysisSummary.title} tone={analysisSummary.tone} />
+              <p style={{ marginTop: 12, fontSize: 13.5, color: C.muted, lineHeight: 1.65 }}>{analysisSummary.note}</p>
+            </div>
+          ) : null}
         </div>
-      </div>
+      ) : null}
+
+      {currentStep === 3 ? (
+        <div style={{ ...card, display: "grid", gap: 18 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+            <div>
+              <Tag label="~60 seconds" tone="teal" />
+              <h2 style={{ fontSize: "clamp(1.7rem,2.5vw,2.3rem)", fontWeight: 800, color: C.navy, margin: "14px 0 8px" }}>Confirm 3 quick details</h2>
+              <p style={{ fontSize: 14, color: C.muted, maxWidth: 760, lineHeight: 1.7 }}>
+                We prefill what we can. You only need to check the few details that matter before submission.
+              </p>
+            </div>
+            <button className="btn btn-ghost" onClick={() => setShowAdvanced((current) => !current)}>
+              {showAdvanced ? "Hide advanced options" : "Show advanced demo options"}
+            </button>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 14 }}>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: C.muted }}>Your name</span>
+              <input value={draft.claimantName} onChange={(event) => setDraft((current) => ({ ...current, claimantName: event.target.value }))} style={{ padding: "12px 14px", borderRadius: 14, border: `1px solid ${C.border}`, background: C.greenL }} />
+              <span style={{ fontSize: 11.5, color: C.green }}>✓ Read from your account</span>
+            </label>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: C.muted }}>Total amount on your bill</span>
+              <input value={draft.claimAmount} onChange={(event) => setDraft((current) => ({ ...current, claimAmount: event.target.value.replace(/[^\d]/g, "") }))} style={{ padding: "12px 14px", borderRadius: 14, border: `1px solid ${C.border}`, background: analysis ? C.greenL : C.surface }} />
+              <span style={{ fontSize: 11.5, color: analysis ? C.green : C.amber }}>{analysis ? "✓ Read from your document" : "Please confirm"}</span>
+            </label>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: C.muted }}>Hospital / garage / provider</span>
+              <input value={draft.providerName} onChange={(event) => setDraft((current) => ({ ...current, providerName: event.target.value }))} style={{ padding: "12px 14px", borderRadius: 14, border: `1px solid ${C.border}`, background: analysis ? C.greenL : C.surface }} />
+              <span style={{ fontSize: 11.5, color: analysis ? C.green : C.amber }}>{analysis ? "✓ Read from your document" : "Please confirm"}</span>
+            </label>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: C.muted }}>Policy number</span>
+              <input value={draft.policyNumber} onChange={(event) => setDraft((current) => ({ ...current, policyNumber: event.target.value }))} style={{ padding: "12px 14px", borderRadius: 14, border: `1px solid ${C.border}`, background: C.greenL }} />
+              <span style={{ fontSize: 11.5, color: C.green }}>✓ Kept from your policy details</span>
+            </label>
+          </div>
+
+          {showAdvanced ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 12, padding: 16, borderRadius: 18, border: `1px solid ${C.border}`, background: C.surfaceSoft }}>
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: C.muted }}>Scenario</span>
+                <select value={draft.scenario} onChange={(event) => setDraft((current) => ({ ...current, scenario: event.target.value }))} style={{ padding: "10px 12px", borderRadius: 12, border: `1px solid ${C.border}`, background: C.surface }}>
+                  <option value="clean">Clean path</option>
+                  <option value="clarification">Clarification path</option>
+                  <option value="review">Review path</option>
+                </select>
+              </label>
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: C.muted }}>City</span>
+                <input value={draft.city} onChange={(event) => setDraft((current) => ({ ...current, city: event.target.value }))} style={{ padding: "10px 12px", borderRadius: 12, border: `1px solid ${C.border}`, background: C.surface }} />
+              </label>
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: C.muted }}>Treatment / repair type</span>
+                <input value={draft.procedure} onChange={(event) => setDraft((current) => ({ ...current, procedure: event.target.value }))} style={{ padding: "10px 12px", borderRadius: 12, border: `1px solid ${C.border}`, background: C.surface }} />
+              </label>
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: C.muted }}>Policy age (days)</span>
+                <input value={draft.policyAgeDays} onChange={(event) => setDraft((current) => ({ ...current, policyAgeDays: event.target.value.replace(/[^\d]/g, "") }))} style={{ padding: "10px 12px", borderRadius: 12, border: `1px solid ${C.border}`, background: C.surface }} />
+              </label>
+            </div>
+          ) : null}
+
+          <div style={{ padding: 20, borderRadius: 22, background: "linear-gradient(135deg,#0f2342,#1a2a4d)", color: "#f7fbff", display: "flex", justifyContent: "space-between", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
+            <div>
+              <strong style={{ display: "block", fontSize: 16, marginBottom: 6 }}>Ready to submit</strong>
+              <p style={{ fontSize: 13, color: "rgba(247,251,255,.72)", maxWidth: 620, lineHeight: 1.65 }}>
+                We will tell you exactly what happens next after submission.
+              </p>
+            </div>
+            <button className="btn btn-teal" disabled={!canCreateClaim || submissionPhase === "processing"} onClick={handleSubmitClaim}>
+              {canCreateClaim ? "Submit claim" : "Read-only role"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {currentStep === 4 ? (
+        <div style={{ ...card, background: "linear-gradient(135deg,#112241,#1b315b)", color: "#f6fbff", display: "grid", gap: 18 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+            <div>
+              <Tag label="Checking your claim" tone="blue" />
+              <h2 style={{ fontSize: "clamp(1.8rem,2.7vw,2.5rem)", fontWeight: 900, margin: "14px 0 8px" }}>Watch it process</h2>
+              <p style={{ fontSize: 14, color: "rgba(246,251,255,.78)", maxWidth: 720, lineHeight: 1.7 }}>
+                We are keeping the next step visible while we read the documents, check the cover, and choose the outcome.
+              </p>
+            </div>
+            <div style={{ minWidth: 140, textAlign: "right" }}>
+              <div style={{ fontSize: 36, fontWeight: 900 }}>{Math.round(submissionProgress * 100)}%</div>
+              <div style={{ fontSize: 12.5, color: "rgba(246,251,255,.68)" }}>Processing</div>
+            </div>
+          </div>
+          <div style={{ height: 10, borderRadius: 999, background: "rgba(255,255,255,.12)", overflow: "hidden" }}>
+            <div style={{ width: `${Math.round(submissionProgress * 100)}%`, height: "100%", background: "linear-gradient(90deg,#00a896,#62d5c5)" }} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 12 }}>
+            {PROCESSING_STEPS.map((step, index) => {
+              const state = index < activeReviewStep ? "done" : index === activeReviewStep ? "active" : "pending";
+              return (
+                <div key={step.title} style={{ padding: 18, borderRadius: 20, border: "1px solid rgba(255,255,255,.1)", background: state === "active" ? "rgba(255,255,255,.1)" : "rgba(255,255,255,.04)" }}>
+                  <div style={{ width: 34, height: 34, borderRadius: "50%", background: state === "done" ? C.teal : state === "active" ? C.blue : "rgba(255,255,255,.12)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13, marginBottom: 12 }}>
+                    {state === "done" ? "✓" : state === "active" ? "→" : index + 1}
+                  </div>
+                  <strong style={{ display: "block", fontSize: 14, marginBottom: 8 }}>{step.title}</strong>
+                  <p style={{ fontSize: 12.5, color: "rgba(246,251,255,.72)", lineHeight: 1.6 }}>{step.note}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {currentStep === 5 && outcome ? (
+        <div style={{ ...card, display: "grid", gap: 18, borderColor: outcome.tone === "teal" ? "rgba(0,168,150,.24)" : outcome.tone === "amber" ? "rgba(183,121,31,.24)" : outcome.tone === "blue" ? "rgba(49,86,211,.24)" : "rgba(15,35,66,.18)", background: outcome.tone === "teal" ? "linear-gradient(135deg,#f4fffc,#eefbf7)" : outcome.tone === "amber" ? "linear-gradient(135deg,#fffdf4,#fff8eb)" : outcome.tone === "blue" ? "linear-gradient(135deg,#f5f9ff,#edf4ff)" : "linear-gradient(135deg,#f8fbff,#eef4fd)" }}>
+          {outcome.tone === "teal" ? (
+            <div style={{ position: "relative", height: 0 }}>
+              {[12, 24, 37, 49, 61, 73, 84].map((left, index) => (
+                <span
+                  key={left}
+                  style={{
+                    position: "absolute",
+                    left: `${left}%`,
+                    top: index % 2 === 0 ? -6 : 8,
+                    width: 10,
+                    height: 18,
+                    borderRadius: 999,
+                    background: index % 3 === 0 ? "#00a896" : index % 3 === 1 ? "#5dd7c7" : "#f59e0b",
+                    opacity: 0,
+                    animation: `confettiFloat 1.9s ease ${index * 110}ms infinite`,
+                  }}
+                />
+              ))}
+            </div>
+          ) : null}
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "flex-start" }}>
+            <div>
+              <Tag label={outcome.badge} tone={outcome.tone} />
+              <h2 style={{ fontSize: "clamp(1.9rem,3vw,2.8rem)", fontWeight: 900, color: C.navy, margin: "16px 0 8px" }}>{outcome.title}</h2>
+              <p style={{ fontSize: 14, color: C.muted, maxWidth: 720, lineHeight: 1.7 }}>{outcome.note}</p>
+            </div>
+            <div
+              className={outcome.tone === "teal" ? "glow-pulse" : undefined}
+              style={{
+                minWidth: outcome.tone === "teal" ? 260 : 220,
+                textAlign: "center",
+                padding: outcome.tone === "teal" ? 24 : 18,
+                borderRadius: 24,
+                background: C.surface,
+                border: `1px solid ${C.border}`,
+              }}
+            >
+              <div className={outcome.tone === "teal" ? "celebrate-bounce" : undefined} style={{ fontSize: outcome.tone === "teal" ? 56 : 44, marginBottom: 8 }}>
+                {outcome.tone === "teal" ? "🎉" : outcome.tone === "amber" ? "🙂" : "🛡️"}
+              </div>
+              <strong style={{ display: "block", fontSize: outcome.tone === "teal" ? 32 : 24, color: outcome.tone === "teal" ? C.teal : outcome.tone === "amber" ? C.amber : C.blue, lineHeight: 1 }}>
+                {formatInr(submissionResult?.claimAmount || 0)}
+              </strong>
+              <div style={{ fontSize: 12.5, color: C.muted, marginTop: 8 }}>
+                {outcome.tone === "teal" ? "Approved amount" : "Claim amount received"}
+              </div>
+              {outcome.highlight ? (
+                <div
+                  style={{
+                    marginTop: 12,
+                    display: "inline-flex",
+                    padding: "6px 12px",
+                    borderRadius: 999,
+                    background: outcome.tone === "teal" ? C.tealL : outcome.tone === "amber" ? C.amberL : C.blueL,
+                    color: outcome.tone === "teal" ? C.tealD : outcome.tone === "amber" ? C.amber : C.blue,
+                    fontSize: 12,
+                    fontWeight: 700,
+                  }}
+                >
+                  {outcome.highlight}
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          {outcome.tone === "teal" ? (
+            <div
+              style={{
+                padding: 20,
+                borderRadius: 22,
+                background: "linear-gradient(135deg,#0f2342,#17345a)",
+                color: "#f7fbff",
+                display: "grid",
+                gridTemplateColumns: "minmax(0,1fr) auto",
+                gap: 16,
+                alignItems: "center",
+              }}
+            >
+              <div>
+                <strong style={{ display: "block", fontSize: 18, marginBottom: 6 }}>Money on its way</strong>
+                <p style={{ fontSize: 13.5, color: "rgba(247,251,255,.72)", lineHeight: 1.65, maxWidth: 700 }}>
+                  Your claim cleared the checks and the payout amount is ready. This is the celebration moment users should remember.
+                </p>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 12, color: "#9edbd2", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".08em", fontWeight: 700 }}>
+                  Next update
+                </div>
+                <div style={{ fontSize: 20, fontWeight: 800 }}>Within 2 business days</div>
+              </div>
+            </div>
+          ) : null}
+
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 14 }}>
+            <div style={{ padding: 18, borderRadius: 18, border: `1px solid ${C.border}`, background: C.surface }}>
+              <strong style={{ display: "block", fontSize: 13.5, color: C.text, marginBottom: 10 }}>Claim receipt</strong>
+              <div style={{ display: "grid", gap: 8 }}>
+                <div style={{ fontSize: 12.5, color: C.muted }}>Claim ID: {submissionResult.id}</div>
+                <div style={{ fontSize: 12.5, color: C.muted }}>Current status: {submissionResult.statusLabel}</div>
+                <div style={{ fontSize: 12.5, color: C.muted }}>
+                  Files still needed: {submissionResult.missingDocuments?.length ? submissionResult.missingDocuments.join(", ") : "None right now"}
+                </div>
+              </div>
+            </div>
+            <div style={{ padding: 18, borderRadius: 18, border: `1px solid ${C.border}`, background: C.surface }}>
+              <strong style={{ display: "block", fontSize: 13.5, color: C.text, marginBottom: 10 }}>What happens next</strong>
+              <div style={{ display: "grid", gap: 8 }}>
+                <div style={{ fontSize: 12.5, color: C.muted }}>{outcome.nextStep}</div>
+                {submissionResult.lowConfidenceFields?.length ? (
+                  <div style={{ fontSize: 12.5, color: C.muted }}>
+                    We may ask you to confirm: {submissionResult.lowConfidenceFields.map((field) => field.field.replace("_", " ")).join(", ")}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <button className="btn btn-primary" onClick={openOutcome}>{outcome.primaryAction}</button>
+            <button className="btn btn-ghost" onClick={resetJourney}>Start another claim</button>
+          </div>
+        </div>
+      ) : null}
 
       <div style={{ ...card, display: "grid", gap: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
           <div>
-            <strong style={{ display: "block", fontSize: 16, color: C.text, marginBottom: 4 }}>Step 3: Confirm the key details</strong>
-            <p style={{ fontSize: 13, color: C.muted }}>
-              We keep only the main fields here. Advanced demo options stay tucked away unless you need them.
+            <strong style={{ display: "block", fontSize: 15, color: C.text, marginBottom: 6 }}>Sample journeys already in the workspace</strong>
+            <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.65 }}>
+              Use these to show the full product after the claimant flow finishes.
             </p>
           </div>
-          <button
-            className="btn btn-ghost"
-            onClick={() => setShowAdvanced((current) => !current)}
-            style={{ paddingInline: 14 }}
-          >
-            {showAdvanced ? "Hide advanced options" : "Show advanced demo options"}
-          </button>
+          <Tag label={scenarioLabel} tone={scenarioTone} />
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 12 }}>
-          <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: C.muted }}>Your name</span>
-            <input value={draft.claimantName} onChange={(event) => setDraft((current) => ({ ...current, claimantName: event.target.value }))} style={{ padding: "12px 14px", borderRadius: 12, border: `1px solid ${C.border}`, background: C.surface }} />
-          </label>
-          <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: C.muted }}>Claim amount</span>
-            <input value={draft.claimAmount} onChange={(event) => setDraft((current) => ({ ...current, claimAmount: event.target.value.replace(/[^\d]/g, "") }))} style={{ padding: "12px 14px", borderRadius: 12, border: `1px solid ${C.border}`, background: C.surface }} />
-          </label>
-          <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: C.muted }}>Hospital / garage / provider</span>
-            <input value={draft.providerName} onChange={(event) => setDraft((current) => ({ ...current, providerName: event.target.value }))} style={{ padding: "12px 14px", borderRadius: 12, border: `1px solid ${C.border}`, background: C.surface }} />
-          </label>
-          <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: C.muted }}>Policy number</span>
-            <input value={draft.policyNumber} onChange={(event) => setDraft((current) => ({ ...current, policyNumber: event.target.value }))} style={{ padding: "12px 14px", borderRadius: 12, border: `1px solid ${C.border}`, background: C.surface }} />
-          </label>
-        </div>
+        <ClaimSwitcher
+          title="Open a sample outcome"
+          claims={claimOptions}
+          activeId={claim?.id}
+          onSelect={onSelectClaim}
+          tone={getInsurancePalette(claim?.insuranceType)}
+          subtitle="Switch between approval, clarification, and review examples"
+        />
 
-        {showAdvanced ? (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 12, padding: 16, borderRadius: 16, background: C.surfaceSoft, border: `1px solid ${C.border}` }}>
-            <label style={{ display: "grid", gap: 6 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: C.muted }}>Scenario</span>
-              <select value={draft.scenario} onChange={(event) => setDraft((current) => ({ ...current, scenario: event.target.value }))} style={{ padding: "10px 12px", borderRadius: 12, border: `1px solid ${C.border}`, background: C.surface }}>
-                <option value="clean">Clean path</option>
-                <option value="clarification">Clarification path</option>
-                <option value="review">Review path</option>
-              </select>
-            </label>
-            <label style={{ display: "grid", gap: 6 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: C.muted }}>City</span>
-              <input value={draft.city} onChange={(event) => setDraft((current) => ({ ...current, city: event.target.value }))} style={{ padding: "10px 12px", borderRadius: 12, border: `1px solid ${C.border}`, background: C.surface }} />
-            </label>
-            <label style={{ display: "grid", gap: 6 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: C.muted }}>Treatment / repair type</span>
-              <input value={draft.procedure} onChange={(event) => setDraft((current) => ({ ...current, procedure: event.target.value }))} style={{ padding: "10px 12px", borderRadius: 12, border: `1px solid ${C.border}`, background: C.surface }} />
-            </label>
-            <label style={{ display: "grid", gap: 6 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: C.muted }}>Policy age (days)</span>
-              <input value={draft.policyAgeDays} onChange={(event) => setDraft((current) => ({ ...current, policyAgeDays: event.target.value.replace(/[^\d]/g, "") }))} style={{ padding: "10px 12px", borderRadius: 12, border: `1px solid ${C.border}`, background: C.surface }} />
-            </label>
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.15fr) minmax(0,.85fr)", gap: 18 }}>
+          <div style={card}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 12, marginBottom: 18 }}>
+              <Field label="Claim ID" value={claim?.id || "No claim selected"} />
+              <Field label="Claim Amount" value={claim ? formatInr(claim.claimAmount) : "—"} />
+              <ConfidenceCard title="Decision confidence" value={claim ? formatInr(claim.claimAmount) : "—"} score={claim ? formatPercent(Math.max(82, 100 - claim.fraudScore)) : "—"} tone={claim?.fraudBand === "high" ? "risk" : "good"} subtitle={claim?.fraudBand === "high" ? "May need extra care" : "Looks suitable for a quick decision"} />
+              <ConfidenceCard title={firstLowConfidence?.field ? firstLowConfidence.field.replace("_", " ") : "Document clarity"} value={firstLowConfidence?.value || "Main details look readable"} score={firstLowConfidence ? formatPercent(firstLowConfidence.confidence) : "91%"} tone={firstLowConfidence ? "risk" : "good"} subtitle={firstLowConfidence ? "One field needs confirmation" : "No obvious clarity issue"} />
+              <ConfidenceCard title={secondLowConfidence?.field ? secondLowConfidence.field.replace("_", " ") : "Current path"} value={secondLowConfidence?.value || claim?.fraudBand?.toUpperCase() || "LOW"} score={secondLowConfidence ? formatPercent(secondLowConfidence.confidence) : formatPercent(claim?.fraudScore || 0)} tone={secondLowConfidence ? "warn" : claim?.fraudBand === "high" ? "risk" : "warn"} subtitle={secondLowConfidence ? "Still being checked" : "Current review score"} />
+              <Field label="Deductible" value={claim ? formatInr(claim.deductibleApplied || 0) : "—"} />
+              <Field label="File confidence" value={claim?.lowConfidenceFields?.length ? formatPercent(claim.lowConfidenceFields[0].confidence) : "91%"} />
+              <Field label="Similarity check" value={claim ? `${Math.round((claim.duplicateSimilarity || 0) * 100)}% match` : "—"} />
+              <Field label="Provider risk" value={claim?.providerRiskLevel ? claim.providerRiskLevel.toUpperCase() : "—"} />
+              <Field label="Missing documents" value={claim?.missingDocuments?.length ? claim.missingDocuments.join(", ") : "None"} />
+              <Field wide label="Notes" value={investigationNote} />
+            </div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button className="btn btn-primary" onClick={onRunDecision} disabled={!approvedClaim}>Open payment path</button>
+              <button className="btn btn-secondary" onClick={onClarification} disabled={!canClarifyClaim || !clarificationClaim}>Open clarification path</button>
+              <button className="btn btn-secondary" onClick={onReview} disabled={!canRouteReview || !reviewClaim}>Open review path</button>
+            </div>
           </div>
-        ) : null}
 
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center", padding: 16, borderRadius: 16, background: "linear-gradient(135deg,#0f2342,#1a2a4d)", color: "#f7fbff" }}>
-          <div>
-            <strong style={{ display: "block", fontSize: 15, marginBottom: 5 }}>Ready to submit</strong>
-            <p style={{ fontSize: 12.5, color: "rgba(244,247,251,.76)", maxWidth: 620, lineHeight: 1.6 }}>
-              {draftPlaybook.claimantSummary}
-            </p>
-          </div>
-          <button className="btn btn-teal" disabled={!canCreateClaim} onClick={() => onCreateClaim({ ...draft, claimAmount: Number(draft.claimAmount), policyAgeDays: Number(draft.policyAgeDays) })}>
-            {canCreateClaim ? "Submit claim" : "Read-only role"}
-          </button>
-        </div>
-      </div>
-
-      <div style={{ ...card, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 18, flexWrap: "wrap" }}>
-        <div>
-          <strong style={{ display: "block", fontSize: 14, marginBottom: 4 }}>See other sample outcomes</strong>
-          <p style={{ fontSize: 13, color: C.muted }}>Switch the demo between a smooth claim, a quick clarification, and a manual review journey.</p>
-        </div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          {[
-            ["clarification", "Needs one more detail"],
-            ["approved", "Smooth approval"],
-            ["review", "Manual review"],
-          ].map(([id, label]) => (
-            <button key={id} className={`mode-chip ${intakeMode === id ? "active" : ""}`} onClick={() => setIntakeMode(id)}>
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.2fr) minmax(0,.8fr)", gap: 18 }}>
-        <div style={card}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-            <strong style={{ fontSize: 15 }}>What we understand from this claim</strong>
-            <Tag label={scenarioLabel} tone={scenarioTone} />
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 12, marginBottom: 18 }}>
-            <Field label="Claim ID" value={claim?.id || "Will be created after submission"} />
-            <Field label="Claim Amount" value={claim ? formatInr(claim.claimAmount) : formatInr(Number(draft.claimAmount || 0))} />
-            <ConfidenceCard title="Amount check" value={claim ? formatInr(claim.claimAmount) : formatInr(Number(draft.claimAmount || 0))} score={claim ? formatPercent(Math.max(82, 100 - claim.fraudScore)) : "91%"} tone={claim?.fraudBand === "high" ? "risk" : "good"} subtitle={claim?.fraudBand === "high" ? "May need review" : "Looks suitable for a quick decision"} />
-            <ConfidenceCard title={firstLowConfidence?.field ? firstLowConfidence.field.replace("_", " ") : "Document clarity"} value={firstLowConfidence?.value || "Main details look readable"} score={firstLowConfidence ? formatPercent(firstLowConfidence.confidence) : "91%"} tone={firstLowConfidence ? "risk" : "good"} subtitle={firstLowConfidence ? "We may ask one follow-up question" : "No obvious clarity issue"} />
-            <ConfidenceCard title={secondLowConfidence?.field ? secondLowConfidence.field.replace("_", " ") : "Risk level"} value={secondLowConfidence?.value || claim?.fraudBand?.toUpperCase() || "LOW"} score={secondLowConfidence ? formatPercent(secondLowConfidence.confidence) : formatPercent(claim?.fraudScore || 0)} tone={secondLowConfidence ? "warn" : claim?.fraudBand === "high" ? "risk" : "warn"} subtitle={secondLowConfidence ? "One field still needs checking" : "Current claim review score"} />
-            <Field label="Deductible" value={claim ? formatInr(claim.deductibleApplied || 0) : "Applied after policy check"} />
-            <Field label="File confidence" value={claim?.lowConfidenceFields?.length ? formatPercent(claim.lowConfidenceFields[0].confidence) : analysis ? `${analysis.confidence}%` : "Will appear after file check"} />
-            <Field label="Similarity check" value={claim ? `${Math.round((claim.duplicateSimilarity || 0) * 100)}% match` : "Runs after submission"} />
-            <Field label="Provider risk" value={claim?.providerRiskLevel ? claim.providerRiskLevel.toUpperCase() : "Checked automatically"} />
-            <Field label="Missing documents" value={claim?.missingDocuments?.length ? claim.missingDocuments.join(", ") : analysis?.missingDocuments?.length ? analysis.missingDocuments.join(", ") : "None detected right now"} />
-            <Field wide label="Notes" value={investigationNote} />
-          </div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button className="btn btn-primary" onClick={onRunDecision}>See decision flow</button>
-            <button className="btn btn-secondary" onClick={onRunDecision}>See payment path</button>
-            <button className="btn btn-danger" onClick={onReview} disabled={!canRouteReview}>Open reviewer path</button>
-            <button className="btn btn-ghost" onClick={onClarification} disabled={!canClarifyClaim}>Open clarification path</button>
-          </div>
-        </div>
-
-        <div style={card}>
-          <h2 style={{ fontSize: 15, fontWeight: 800, marginBottom: 8 }}>Your document pack</h2>
-          <p style={{ fontSize: 13, color: C.muted, marginBottom: 14 }}>{activePlaybook.evidenceDescription}</p>
-          <div style={{ padding: 14, borderRadius: 16, border: `1px solid ${C.border}`, background: C.surfaceSoft, marginBottom: 14 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>{claim ? activePlaybook.evidenceTitle : "Expected documents"}</div>
-            {activePlaybook.requiredDocuments.map((item, index) => (
-              <div key={item} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 12.5, color: C.muted, padding: "7px 0", borderBottom: index < activePlaybook.requiredDocuments.length - 1 ? `1px solid ${C.border}` : "none" }}>
-                <span>{item}</span>
-                <span>{analysis?.missingDocuments?.includes(item.toLowerCase()) || claim?.missingDocuments?.includes(item.toLowerCase()) ? "Needed" : "Good"}</span>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: "grid", gap: 8 }}>
-            <Tag label={firstLowConfidence ? `We may need to confirm ${firstLowConfidence.field.replace("_", " ")}` : "Main details look verified"} tone={firstLowConfidence ? "rose" : "teal"} />
-            <Tag label={claim?.missingDocuments?.length ? `Still needed: ${claim.missingDocuments.join(", ")}` : analysis?.missingDocuments?.length ? `May still need: ${analysis.missingDocuments.join(", ")}` : "No missing document detected"} tone={claim?.missingDocuments?.length || analysis?.missingDocuments?.length ? "amber" : "teal"} />
-            <Tag label={`Current path: ${scenarioLabel}`} tone="blue" />
+          <div style={card}>
+            <h2 style={{ fontSize: 15, fontWeight: 800, marginBottom: 8 }}>What we look for</h2>
+            <p style={{ fontSize: 13, color: C.muted, marginBottom: 14 }}>{activePlaybook.evidenceDescription}</p>
+            <div style={{ display: "grid", gap: 8, marginBottom: 14 }}>
+              {activePlaybook.claimantChecklist.map((item) => (
+                <div key={item} style={{ fontSize: 12.5, color: C.muted }}>• {item}</div>
+              ))}
+            </div>
+            <div style={{ display: "grid", gap: 8 }}>
+              <Tag label={firstLowConfidence ? `We may ask about ${firstLowConfidence.field.replace("_", " ")}` : "Main details look verified"} tone={firstLowConfidence ? "amber" : "teal"} />
+              <Tag label={claim?.missingDocuments?.length ? `Still needed: ${claim.missingDocuments.join(", ")}` : "No missing document right now"} tone={claim?.missingDocuments?.length ? "amber" : "teal"} />
+              <Tag label={`Current path: ${scenarioLabel}`} tone={scenarioTone} />
+            </div>
           </div>
         </div>
       </div>
 
       <ProcessingPanel
-        title="What happens after you submit"
-        subtitle="We check the documents step by step, ask for clarification only if needed, and keep the next step visible."
+        title="Behind the scenes"
+        subtitle="This is the back-office processing view used for the demo after a claim is filed."
         summary={progressSummary}
         steps={steps}
         spotlight={intakeMode === "clarification" ? "clarification" : intakeMode === "approved" ? "decision" : "fraud"}

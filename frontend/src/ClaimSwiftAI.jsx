@@ -287,8 +287,10 @@ export default function App() {
         setIntakeMode(getModeFromClaim(next.claim));
         setScreen("intake");
         addToast(`Claim ${next.claim.id} created`, "teal");
+        return next;
       } catch (err) {
         addToast(err.message, "rose");
+        throw err;
       }
     },
     [addToast, loadPlatformOps],

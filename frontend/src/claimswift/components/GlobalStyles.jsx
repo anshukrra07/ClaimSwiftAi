@@ -10,9 +10,14 @@ export default function GlobalStyles() {
       @keyframes screenIn{from{opacity:0;transform:translateY(8px) scale(.995)}to{opacity:1;transform:none}}
       @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
       @keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+      @keyframes celebrateBounce{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-8px) scale(1.04)}}
+      @keyframes confettiFloat{0%{opacity:0;transform:translateY(18px) rotate(0deg)}20%{opacity:1}100%{opacity:0;transform:translateY(-38px) rotate(18deg)}}
+      @keyframes glowPulse{0%,100%{box-shadow:0 0 0 0 rgba(0,168,150,.16)}50%{box-shadow:0 0 0 14px rgba(0,168,150,0)}}
       .screen-in{animation:screenIn 400ms cubic-bezier(.22,1,.36,1) both}
       .rise-in{animation:riseIn 500ms cubic-bezier(.22,1,.36,1) both}
       .pulse-dot{animation:pulse 1.4s ease infinite}
+      .celebrate-bounce{animation:celebrateBounce 1.8s ease-in-out infinite}
+      .glow-pulse{animation:glowPulse 2s ease-in-out infinite}
       .nav-btn{display:block;width:100%;text-align:left;padding:10px 12px;border-radius:12px;color:rgba(245,248,255,.72);font-size:.9rem;transition:all 160ms ease;border:1px solid transparent}
       .nav-btn:hover{color:#fff;background:rgba(49,86,211,.18);border-color:rgba(147,177,255,.16)}
       .nav-btn.active{color:#fff;background:rgba(49,86,211,.22);border-color:rgba(147,177,255,.22)}
